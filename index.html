@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ひとこと</title>
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg:#0e0e0f; --surface:#18181b; --surface2:#222226;
+      --border:#2e2e34; --accent:#7fff6e; --accent2:#6ee0ff;
+      --text:#f0f0f0; --muted:#888; --danger:#ff6e6e; --radius:14px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:'Zen Kaku Gothic New',sans-serif;min-height:100vh;}
+    .page{display:none;}
+    .page.active{display:block;}
+
+    /* ── 認証 ── */
+    #page-auth{display:none;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;gap:28px;}
+    #page-auth.active{display:flex;}
+    .auth-logo{font-size:2.8rem;font-weight:900;letter-spacing:-2px;}
+    .auth-logo span{color:var(--accent);}
+    .auth-tagline{color:var(--muted);font-size:.9rem;}
+    .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:16px;}
+    .auth-tabs{display:flex;gap:6px;background:var(--bg);border-radius:8px;padding:4px;}
+    .auth-tab{flex:1;background:none;border:none;color:var(--muted);padding:8px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:.9rem;transition:all .2s;}
+    .auth-tab.active{background:var(--surface2);color:var(--text);}
+    .form-group{display:flex;flex-direction:column;gap:6px;}
+    label{font-size:.78rem;color:var(--muted);font-family:'DM Mono',monospace;}
+    input{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:1rem;padding:11px 13px;outline:none;transition:border-color .2s;}
+    input:focus{border-color:var(--accent);}
+    .btn-primary{background:var(--accent);border:none;border-radius:8px;color:#0a0a0a;cursor:pointer;font-family:inherit;font-size:1rem;font-weight:700;padding:12px;transition:opacity .2s;width:100%;}
+    .btn-primary:hover{opacity:.85;}
+    .msg{font-size:.85rem;padding:10px 13px;border-radius:8px;margin-top:4px;}
+    .msg.error{background:#3a1a1a;color:var(--danger);}
+    .msg.success{background:#1a3a1a;color:var(--accent);}
+
+    /* ── アプリ ── */
+    #page-app{display:none;flex-direction:column;min-height:100vh;}
+    #page-app.active{display:flex;}
+    .app-header{position:sticky;top:0;z-index:200;background:rgba(14,14,15,.93);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;}
+    .header-logo{font-size:1.3rem;font-weight:900;letter-spacing:-1px;}
+    .header-logo span{color:var(--accent);}
+    .user-badge{display:flex;align-items:center;gap:10px;}
+    .avatar{width:32px;height:32px;border-radius:50%;background:var(--accent);color:#0a0a0a;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0;}
+    .username-label{font-size:.85rem;color:var(--muted);}
+    .btn-logout{background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 10px;transition:all .2s;}
+    .btn-logout:hover{color:var(--text);border-color:var(--text);}
+
+    /* 通知ベルボタン */
+    .btn-notif{position:relative;background:none;border:none;cursor:pointer;font-size:1.2rem;line-height:1;padding:4px;}
+    .notif-badge{position:absolute;top:-2px;right:-2px;background:var(--danger);color:#fff;font-size:.6rem;font-weight:700;border-radius:99px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 3px;display:none;}
+    .notif-badge.show{display:flex;}
+
+    /* 通知ドロップダウン */
+    .notif-dropdown{position:absolute;top:58px;right:12px;width:300px;max-height:360px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);z-index:300;box-shadow:0 8px 32px rgba(0,0,0,.5);display:none;}
+    .notif-dropdown.open{display:block;}
+    .notif-header{padding:12px 16px;border-bottom:1px solid var(--border);font-size:.78rem;font-family:'DM Mono',monospace;color:var(--muted);display:flex;justify-content:space-between;align-items:center;}
+    .btn-mark-read{background:none;border:none;color:var(--accent);font-size:.75rem;cursor:pointer;font-family:'DM Mono',monospace;}
+    .notif-item{padding:12px 16px;border-bottom:1px solid var(--border);font-size:.88rem;line-height:1.5;cursor:pointer;transition:background .15s;}
+    .notif-item:hover{background:var(--surface2);}
+    .notif-item.unread{background:#1a2a1a;}
+    .notif-item:last-child{border-bottom:none;}
+    .notif-empty{padding:24px;text-align:center;color:var(--muted);font-size:.85rem;}
+
+    /* フィード */
+    .feed{max-width:580px;margin:0 auto;padding:20px 14px;display:flex;flex-direction:column;gap:16px;width:100%;}
+    .compose{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:10px;}
+    .compose textarea{background:none;border:none;color:var(--text);font-family:inherit;font-size:1rem;outline:none;resize:none;width:100%;min-height:70px;line-height:1.6;}
+    .compose textarea::placeholder{color:var(--muted);}
+    .compose-footer{display:flex;align-items:center;justify-content:space-between;}
+    .char-count{font-family:'DM Mono',monospace;font-size:.76rem;color:var(--muted);}
+    .char-count.warn{color:#ffb86e;}
+    .char-count.over{color:var(--danger);}
+    .btn-post{background:var(--accent);border:none;border-radius:8px;color:#0a0a0a;cursor:pointer;font-family:inherit;font-size:.9rem;font-weight:700;padding:8px 20px;transition:opacity .2s;}
+    .btn-post:hover{opacity:.85;}
+    .btn-post:disabled{opacity:.3;cursor:not-allowed;}
+    .section-label{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;padding:0 2px;}
+    .posts{display:flex;flex-direction:column;gap:10px;}
+    .post-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:15px;display:flex;flex-direction:column;gap:10px;animation:fadeUp .25s ease;}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+    .post-head{display:flex;align-items:center;gap:10px;}
+    .post-avatar{width:36px;height:36px;border-radius:50%;background:var(--accent2);color:#0a0a0a;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0;}
+    .post-name{font-weight:700;font-size:.9rem;}
+    .post-time{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);margin-top:2px;}
+    .post-body{font-size:.96rem;line-height:1.65;word-break:break-word;white-space:pre-wrap;}
+    .post-foot{display:flex;align-items:center;gap:14px;}
+    .btn-like{background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.85rem;padding:3px 0;display:flex;align-items:center;gap:5px;transition:color .2s;}
+    .btn-like:hover,.btn-like.liked{color:var(--danger);}
+    .btn-comment-toggle{background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:.85rem;padding:3px 0;display:flex;align-items:center;gap:5px;transition:color .2s;}
+    .btn-comment-toggle:hover{color:var(--accent2);}
+    .btn-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.8rem;margin-left:auto;transition:color .2s;}
+    .btn-del:hover{color:var(--danger);}
+
+    /* コメント */
+    .comments-section{border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:8px;}
+    .comment-item{display:flex;gap:8px;align-items:flex-start;}
+    .comment-avatar{width:26px;height:26px;border-radius:50%;background:var(--surface2);color:var(--muted);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.7rem;flex-shrink:0;border:1px solid var(--border);}
+    .comment-body-wrap{flex:1;}
+    .comment-name{font-size:.78rem;font-weight:700;color:var(--accent2);}
+    .comment-text{font-size:.88rem;line-height:1.5;word-break:break-word;white-space:pre-wrap;margin-top:2px;}
+    .comment-time{font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;margin-top:2px;}
+    .comment-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.7rem;margin-left:4px;}
+    .comment-del:hover{color:var(--danger);}
+    .comment-input-row{display:flex;gap:8px;align-items:flex-end;margin-top:4px;}
+    .comment-input{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:.88rem;padding:8px 10px;outline:none;flex:1;resize:none;line-height:1.4;min-height:36px;max-height:100px;transition:border-color .2s;}
+    .comment-input:focus{border-color:var(--accent2);}
+    .btn-send{background:var(--accent2);border:none;border-radius:8px;color:#0a0a0a;cursor:pointer;font-family:inherit;font-size:.82rem;font-weight:700;padding:8px 14px;white-space:nowrap;transition:opacity .2s;}
+    .btn-send:hover{opacity:.85;}
+    .btn-send:disabled{opacity:.3;cursor:not-allowed;}
+
+    .empty{text-align:center;color:var(--muted);padding:48px 0;font-size:.9rem;}
+    .loading{text-align:center;color:var(--muted);padding:32px;font-family:'DM Mono',monospace;font-size:.8rem;}
+
+    /* トースト通知 */
+    #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:12px 20px;font-size:.9rem;color:var(--accent);z-index:9999;transition:transform .3s ease;pointer-events:none;white-space:nowrap;}
+    #toast.show{transform:translateX(-50%) translateY(0);}
+  </style>
+</head>
+<body>
+
+<!-- 認証画面 -->
+<div id="page-auth" class="page">
+  <div class="auth-logo">ひとこと<span>.</span></div>
+  <p class="auth-tagline">友達だけの、小さなSNS</p>
+  <div class="auth-card">
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">ログイン</button>
+      <button class="auth-tab" id="tab-signup" onclick="switchTab('signup')">新規登録</button>
+    </div>
+    <div id="form-login">
+      <div class="form-group">
+        <label>メールアドレス</label>
+        <input type="email" id="login-email" placeholder="you@example.com">
+      </div>
+      <div class="form-group" style="margin-top:10px">
+        <label>パスワード</label>
+        <input type="password" id="login-pass" placeholder="••••••••">
+      </div>
+      <div id="login-msg" style="display:none" class="msg"></div>
+      <button class="btn-primary" style="margin-top:14px" onclick="doLogin()">ログイン</button>
+    </div>
+    <div id="form-signup" style="display:none">
+      <div class="form-group">
+        <label>ユーザー名</label>
+        <input type="text" id="reg-name" placeholder="yourname" maxlength="20">
+      </div>
+      <div class="form-group" style="margin-top:10px">
+        <label>メールアドレス</label>
+        <input type="email" id="reg-email" placeholder="you@example.com">
+      </div>
+      <div class="form-group" style="margin-top:10px">
+        <label>パスワード（6文字以上）</label>
+        <input type="password" id="reg-pass" placeholder="••••••••">
+      </div>
+      <div id="reg-msg" style="display:none" class="msg"></div>
+      <button class="btn-primary" style="margin-top:14px" onclick="doSignup()">登録する</button>
+    </div>
+  </div>
+</div>
+
+<!-- アプリ画面 -->
+<div id="page-app" class="page">
+  <header class="app-header">
+    <div class="header-logo">ひとこと<span>.</span></div>
+    <div class="user-badge">
+      <button class="btn-notif" onclick="toggleNotif()" id="btn-notif">
+        🔔
+        <span class="notif-badge" id="notif-badge">0</span>
+      </button>
+      <div class="avatar" id="hd-avatar">?</div>
+      <span class="username-label" id="hd-name"></span>
+      <button class="btn-logout" onclick="doLogout()">ログアウト</button>
+    </div>
+  </header>
+
+  <!-- 通知ドロップダウン -->
+  <div class="notif-dropdown" id="notif-dropdown">
+    <div class="notif-header">
+      通知
+      <button class="btn-mark-read" onclick="markAllRead()">すべて既読</button>
+    </div>
+    <div id="notif-list"><div class="notif-empty">通知はありません</div></div>
+  </div>
+
+  <div class="feed">
+    <div class="compose">
+      <textarea id="post-input" placeholder="いまどうしてる？" maxlength="280" oninput="onInput()"></textarea>
+      <div class="compose-footer">
+        <span class="char-count" id="char-count">0 / 280</span>
+        <button class="btn-post" id="post-btn" onclick="doPost()" disabled>投稿</button>
+      </div>
+    </div>
+    <div class="section-label">タイムライン</div>
+    <div class="posts" id="posts-list">
+      <div class="loading">読み込み中...</div>
+    </div>
+  </div>
+</div>
+
+<!-- トースト -->
+<div id="toast"></div>
+
+<script>
+// ════════════════════════════════
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+// ════════════════════════════════
+
+let sb, me;
+let openComments = new Set(); // 開いているコメントセクション
+
+// ── 初期化 ──
+window.addEventListener('load', () => {
+  if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+    showPage('app');
+    document.getElementById('posts-list').innerHTML = '<div class="empty">⚙️ SUPABASE_URL と SUPABASE_KEY を設定してください</div>';
+    return;
+  }
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  sb.auth.getSession().then(({ data }) => {
+    if (data.session) enterApp(data.session.user);
+    else showPage('auth');
+  });
+  // ドロップダウンを外クリックで閉じる
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#btn-notif') && !e.target.closest('#notif-dropdown')) {
+      document.getElementById('notif-dropdown').classList.remove('open');
+    }
+  });
+});
+
+// ── ページ切り替え ──
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+}
+function switchTab(tab) {
+  document.getElementById('form-login').style.display  = tab === 'login'  ? '' : 'none';
+  document.getElementById('form-signup').style.display = tab === 'signup' ? '' : 'none';
+  document.getElementById('tab-login').classList.toggle('active',  tab === 'login');
+  document.getElementById('tab-signup').classList.toggle('active', tab === 'signup');
+}
+
+// ── 認証 ──
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  const msg   = document.getElementById('login-msg');
+  if (!email || !pass) return showMsg(msg, 'error', 'すべて入力してください');
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) return showMsg(msg, 'error', 'メールまたはパスワードが違います');
+  enterApp(data.user);
+}
+async function doSignup() {
+  const name  = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass  = document.getElementById('reg-pass').value;
+  const msg   = document.getElementById('reg-msg');
+  if (!name || !email || !pass) return showMsg(msg, 'error', 'すべて入力してください');
+  if (pass.length < 6) return showMsg(msg, 'error', 'パスワードは6文字以上です');
+  const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { username: name } } });
+  if (error) return showMsg(msg, 'error', error.message);
+  const { data: ld, error: le } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (le) { showMsg(msg, 'success', '登録完了！ログインしてください'); setTimeout(() => switchTab('login'), 1500); }
+  else enterApp(ld.user);
+}
+async function doLogout() {
+  await sb.auth.signOut();
+  me = null;
+  showPage('auth');
+}
+
+// ── アプリ入場 ──
+function enterApp(user) {
+  me = user;
+  const name = user.user_metadata?.username || user.email.split('@')[0];
+  document.getElementById('hd-avatar').textContent = name.charAt(0).toUpperCase();
+  document.getElementById('hd-name').textContent   = name;
+  showPage('app');
+  loadPosts();
+  loadNotifications();
+  // リアルタイム
+  sb.channel('rt-posts')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, loadPosts)
+    .subscribe();
+  sb.channel('rt-comments')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments' }, onNewComment)
+    .subscribe();
+  sb.channel('rt-notifs')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `to_user_id=eq.${me.id}` }, onNewNotif)
+    .subscribe();
+}
+
+// ── 投稿 ──
+function onInput() {
+  const len = document.getElementById('post-input').value.length;
+  const el  = document.getElementById('char-count');
+  el.textContent = len + ' / 280';
+  el.className = len > 260 ? (len > 280 ? 'char-count over' : 'char-count warn') : 'char-count';
+  document.getElementById('post-btn').disabled = len === 0 || len > 280;
+}
+async function doPost() {
+  const ta   = document.getElementById('post-input');
+  const text = ta.value.trim();
+  if (!text) return;
+  document.getElementById('post-btn').disabled = true;
+  const name = me.user_metadata?.username || me.email.split('@')[0];
+  await sb.from('posts').insert({ user_id: me.id, username: name, content: text, liked_by: [] });
+  ta.value = ''; onInput();
+}
+async function loadPosts() {
+  const { data, error } = await sb.from('posts').select('*').order('created_at', { ascending: false }).limit(60);
+  const list = document.getElementById('posts-list');
+  if (error || !data) { list.innerHTML = '<div class="empty">読み込みに失敗しました</div>'; return; }
+  if (!data.length)   { list.innerHTML = '<div class="empty">まだ投稿がありません。最初の一言をどうぞ！</div>'; return; }
+  list.innerHTML = data.map(postCard).join('');
+  // 開いていたコメントを再描画後に再ロード
+  openComments.forEach(pid => loadComments(pid));
+}
+
+function postCard(p) {
+  const name    = esc(p.username || '名無し');
+  const initial = name.charAt(0).toUpperCase();
+  const liked   = (p.liked_by || []).includes(me?.id);
+  const count   = (p.liked_by || []).length;
+  const isOwn   = me && p.user_id === me.id;
+  const isOpen  = openComments.has(p.id);
+  return `
+  <div class="post-card" id="pc-${p.id}">
+    <div class="post-head">
+      <div class="post-avatar">${initial}</div>
+      <div>
+        <div class="post-name">${name}</div>
+        <div class="post-time">${relTime(p.created_at)}</div>
+      </div>
+    </div>
+    <div class="post-body">${esc(p.content)}</div>
+    <div class="post-foot">
+      <button class="btn-like ${liked?'liked':''}" onclick="toggleLike('${p.id}','${p.user_id}',${liked})">
+        ${liked?'♥':'♡'} ${count}
+      </button>
+      <button class="btn-comment-toggle" onclick="toggleComments('${p.id}')">
+        💬 <span id="cc-${p.id}">...</span>
+      </button>
+      ${isOwn?`<button class="btn-del" onclick="delPost('${p.id}')">削除</button>`:''}
+    </div>
+    <div class="comments-section" id="cs-${p.id}" style="${isOpen?'':'display:none'}">
+      <div id="cl-${p.id}"></div>
+      <div class="comment-input-row">
+        <textarea class="comment-input" id="ci-${p.id}" placeholder="コメントを書く…" rows="1"
+          oninput="autoResize(this)" onkeydown="commentEnter(event,'${p.id}')"></textarea>
+        <button class="btn-send" onclick="postComment('${p.id}','${p.user_id}')">送信</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// コメント数を読み込み（カード描画後）
+async function loadCommentCounts() {
+  const { data } = await sb.from('comments').select('post_id');
+  if (!data) return;
+  const counts = {};
+  data.forEach(r => { counts[r.post_id] = (counts[r.post_id]||0)+1; });
+  document.querySelectorAll('[id^="cc-"]').forEach(el => {
+    const pid = el.id.replace('cc-','');
+    el.textContent = counts[pid] || 0;
+  });
+}
+
+// ── コメント ──
+function toggleComments(pid) {
+  const section = document.getElementById('cs-'+pid);
+  if (openComments.has(pid)) {
+    openComments.delete(pid);
+    section.style.display = 'none';
+  } else {
+    openComments.add(pid);
+    section.style.display = '';
+    loadComments(pid);
+  }
+}
+
+async function loadComments(pid) {
+  const { data } = await sb.from('comments').select('*').eq('post_id', pid).order('created_at');
+  const el = document.getElementById('cl-'+pid);
+  if (!el) return;
+  if (!data || !data.length) { el.innerHTML = '<div style="font-size:.8rem;color:var(--muted);padding:4px 0">まだコメントがありません</div>'; }
+  else el.innerHTML = data.map(commentHTML).join('');
+  // コメント数更新
+  const cc = document.getElementById('cc-'+pid);
+  if (cc) cc.textContent = data ? data.length : 0;
+}
+
+function commentHTML(c) {
+  const name    = esc(c.username || '名無し');
+  const initial = name.charAt(0).toUpperCase();
+  const isOwn   = me && c.user_id === me.id;
+  return `
+  <div class="comment-item" id="ci-item-${c.id}">
+    <div class="comment-avatar">${initial}</div>
+    <div class="comment-body-wrap">
+      <span class="comment-name">${name}</span>
+      ${isOwn?`<button class="comment-del" onclick="delComment('${c.id}','${c.post_id}')">✕</button>`:''}
+      <div class="comment-text">${esc(c.content)}</div>
+      <div class="comment-time">${relTime(c.created_at)}</div>
+    </div>
+  </div>`;
+}
+
+async function postComment(pid, postOwnerId) {
+  const ta   = document.getElementById('ci-'+pid);
+  const text = ta.value.trim();
+  if (!text) return;
+  const name = me.user_metadata?.username || me.email.split('@')[0];
+  await sb.from('comments').insert({ post_id: pid, user_id: me.id, username: name, content: text });
+  // 投稿主が自分でなければ通知
+  if (postOwnerId !== me.id) {
+    await sb.from('notifications').insert({
+      to_user_id: postOwnerId,
+      from_username: name,
+      type: 'comment',
+      post_id: pid,
+      message: `${name} があなたの投稿にコメントしました`
+    });
+  }
+  ta.value = ''; autoResize(ta);
+  loadComments(pid);
+}
+
+async function delComment(cid, pid) {
+  await sb.from('comments').delete().eq('id', cid);
+  loadComments(pid);
+}
+
+function onNewComment(payload) {
+  const pid = payload.new.post_id;
+  if (openComments.has(pid)) loadComments(pid);
+  // コメント数更新
+  const cc = document.getElementById('cc-'+pid);
+  if (cc) cc.textContent = parseInt(cc.textContent||0) + 1;
+}
+
+// ── いいね ──
+async function toggleLike(pid, postOwnerId, liked) {
+  const { data } = await sb.from('posts').select('liked_by').eq('id', pid).single();
+  let arr = data.liked_by || [];
+  const name = me.user_metadata?.username || me.email.split('@')[0];
+  if (liked) {
+    arr = arr.filter(x => x !== me.id);
+  } else {
+    arr = [...new Set([...arr, me.id])];
+    // 投稿主が自分でなければ通知
+    if (postOwnerId !== me.id) {
+      await sb.from('notifications').insert({
+        to_user_id: postOwnerId,
+        from_username: name,
+        type: 'like',
+        post_id: pid,
+        message: `${name} があなたの投稿にいいねしました`
+      });
+    }
+  }
+  await sb.from('posts').update({ liked_by: arr }).eq('id', pid);
+  loadPosts();
+}
+
+async function delPost(id) {
+  if (!confirm('削除しますか？')) return;
+  await sb.from('posts').delete().eq('id', id);
+  loadPosts();
+}
+
+// ── 通知 ──
+async function loadNotifications() {
+  const { data } = await sb.from('notifications')
+    .select('*').eq('to_user_id', me.id)
+    .order('created_at', { ascending: false }).limit(30);
+  renderNotifications(data || []);
+}
+
+function renderNotifications(list) {
+  const el    = document.getElementById('notif-list');
+  const badge = document.getElementById('notif-badge');
+  const unread = list.filter(n => !n.is_read).length;
+  if (unread > 0) {
+    badge.textContent = unread > 9 ? '9+' : unread;
+    badge.classList.add('show');
+  } else {
+    badge.classList.remove('show');
+  }
+  if (!list.length) { el.innerHTML = '<div class="notif-empty">通知はありません</div>'; return; }
+  el.innerHTML = list.map(n => `
+    <div class="notif-item ${n.is_read?'':'unread'}">
+      ${n.type === 'like' ? '♥' : '💬'} ${esc(n.message)}
+      <div style="font-size:.7rem;color:var(--muted);margin-top:3px;font-family:'DM Mono',monospace">${relTime(n.created_at)}</div>
+    </div>`).join('');
+}
+
+function onNewNotif(payload) {
+  showToast(payload.new.type === 'like' ? `♥ ${payload.new.from_username} がいいねしました` : `💬 ${payload.new.from_username} がコメントしました`);
+  loadNotifications();
+}
+
+function toggleNotif() {
+  document.getElementById('notif-dropdown').classList.toggle('open');
+  // 開いたら既読に
+  markAllRead();
+}
+
+async function markAllRead() {
+  await sb.from('notifications').update({ is_read: true }).eq('to_user_id', me.id).eq('is_read', false);
+  document.getElementById('notif-badge').classList.remove('show');
+  loadNotifications();
+}
+
+// ── トースト ──
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── ユーティリティ ──
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+function commentEnter(e, pid) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postComment(pid); }
+}
+function showMsg(el, type, text) {
+  el.className = 'msg ' + type; el.textContent = text; el.style.display = 'block';
+}
+function relTime(iso) {
+  const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (s < 60)    return s + '秒前';
+  if (s < 3600)  return Math.floor(s/60) + '分前';
+  if (s < 86400) return Math.floor(s/3600) + '時間前';
+  const d = new Date(iso); return (d.getMonth()+1) + '/' + d.getDate();
+}
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// カード描画後にコメント数を取得
+const _origLoadPosts = loadPosts;
+</script>
+</body>
+</html>
